@@ -1,0 +1,198 @@
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Semaphore;
+import java.util.Date;
+
+//import static sun.plugin2.util.PluginTrace.broadcast;
+
+
+final class ChatServer {
+    private static int uniqueId = 0;
+    private final List<ClientThread> clients = new ArrayList<>();
+    private final int port;
+    static Semaphore listMutex = new Semaphore(1);
+    private String file;
+    private ChatFilter cf;
+
+    private ChatServer(int port, String file) {
+        this.port = port;
+        this.file = file;
+        cf = new ChatFilter(file);
+    } //constructor
+
+    public void remove(final int id) {
+        try {
+            this.listMutex.acquire();
+            this.clients.remove(id);
+            this.listMutex.release();
+            System.out.println("Removed client at index at [" + id + "]");
+        } catch (IndexOutOfBoundsException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    } //remove
+
+    /*
+     * This is what starts the ChatServer.
+     * Right now it just creates the socketServer and adds a new ClientThread to a list to be handled
+     */
+    private void start() {
+        ServerSocket serverSocket;
+        try {
+            serverSocket = new ServerSocket(this.port);
+            while (this.clients.size() < 3) {
+                Socket socket = serverSocket.accept();
+                Runnable r = new ClientThread(socket, ChatServer.uniqueId++);
+                System.out.println("Accepted connection " + ChatServer.uniqueId + " " + socket.getInetAddress() + ":" +socket.getLocalPort());
+                Thread t = new Thread(r);
+                this.listMutex.acquire();
+                clients.add((ClientThread) r);
+                this.listMutex.release();
+                t.start();
+                String s = "Accepted " + ChatServer.uniqueId + " connections";
+                broadcast(s);
+            }
+
+            serverSocket.close();
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    } //start
+
+    /*
+     * Broadcast Method
+     */
+
+    synchronized void broadcast(String msg) {
+        ChatFilter cf = new ChatFilter(file);
+        msg = cf.filter(msg);
+        for (ClientThread cT : this.clients) {
+            try {
+                cT.writeMutex.acquire();
+                cT.sOutput.writeObject(new ChatMessage(0, msg));
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    } //broadcast
+
+
+    /*
+     *  > java ChatServer
+     *  > java ChatServer portNumber
+     *  If the port number is not specified 1500 is used
+     */
+    public static void main(String[] args) {
+        ChatServer server;
+        if (args.length == 0) {
+            server = new ChatServer(1500, "badwords.txt");
+        } else if (args.length == 1) {
+            server = new ChatServer(Integer.parseInt(args[0]), "badwords.txt");
+        } else {
+            server = new ChatServer(Integer.parseInt(args[0]), args[1]);
+        }
+        server.start();
+    } //main
+
+
+    /*
+     * This is a private class inside of the ChatServer
+     * A new thread will be created to run this every time a new client connects.
+     */
+    private final class ClientThread implements Runnable {
+        Socket socket;
+        ObjectInputStream sInput;
+        ObjectOutputStream sOutput;
+        int id;
+        String username;
+        ChatMessage cm;
+        Semaphore writeMutex;
+
+        private ClientThread(Socket socket, int id) {
+            this.id = id;
+            this.socket = socket;
+            this.writeMutex = new Semaphore(1);
+            try {
+                this.sOutput = new ObjectOutputStream(socket.getOutputStream());
+                this.sInput = new ObjectInputStream(socket.getInputStream());
+                this.username = (String) sInput.readObject();
+            } catch (IOException | ClassNotFoundException e) {
+                e.printStackTrace();
+            }
+        } //ClientThread
+
+        /*
+         * Close the socket
+         */
+
+        private void close() {
+            try {
+                this.sInput.close();
+                this.sOutput.close();
+                //remove client from arrayList?
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } //close
+
+        /*
+         * Write message method
+         */
+
+        public boolean writeMessage(String msg) {
+            try {
+                this.writeMutex.acquire();
+                msg = cf.filter(msg);
+                this.sOutput.writeObject(new ChatMessage(0, msg));
+                this.writeMutex.release();
+            } catch (InterruptedException | IOException e) {
+                e.printStackTrace();
+                return false;
+            }
+            return true;
+        } //writeMessage
+
+        /*
+         * This is what the client thread actually runs.
+         */
+        @Override
+        public void run() {
+            while (true) {
+                // Read the username sent to you by client
+                Date now = new Date();
+                String dateTime = now.toString();
+                SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss");
+                try {
+                    cm = (ChatMessage) sInput.readObject();
+
+                    //System.out.println(username + ": Ping");
+
+                    System.out.println(format.format(now) + " " + username + ": " + cm._msg);
+
+
+                    // Send message back to the client
+                    try {
+                        sOutput.writeObject("Pong\n");
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } catch (IOException | ClassNotFoundException e) {
+                    System.out.println(format.format(now) + " " + username + " has logged out");
+                    e.printStackTrace();
+                    break;
+                }
+
+            } //while
+        } //run
+    } //ClientThread class
+} //ChatServer class
