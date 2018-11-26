@@ -1,0 +1,63 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.io.FileReader;
+import java.io.File;
+
+public class ChatFilter {
+
+    private ArrayList<String> badWords = new ArrayList<String>();
+
+    public ChatFilter(String badWordsFileName) {
+        try {
+            File f = new File(badWordsFileName);
+            FileReader fr = new FileReader(f);
+            BufferedReader br = new BufferedReader(fr);
+            String string = br.readLine();
+
+            //read in badwords.txt file and put each line in the badWords ArrayList
+            while (string != null) {
+                badWords.add(string);
+                string = br.readLine();
+            } //while
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    } //constructor
+
+    public String filter(String msg) {
+        String msgCopy = msg.toUpperCase();
+        //make replacement string for bad word
+        String replacement = "";
+        for (int i = 0; i < badWords.size(); i++) {
+            //make replacement string for badWord at index i
+            for (int j = 0; j < badWords.get(j).length(); j++) {
+                replacement += "*";
+            } //for
+
+
+            msg = msg.replaceAll("(?i)" + badWords.get(i), replacement);
+
+//            //add each index of the bad word in the uppercase copy to an int array
+//            ArrayList<Integer> index = new ArrayList<Integer>();
+//            while (msgCopy.contains(badWords.get(i))) {
+//                index.add(msgCopy.lastIndexOf(badWords.get(i)));
+//                msgCopy = msgCopy.substring(0, msgCopy.lastIndexOf(badWords.get(i)));
+//            } //while
+//
+//            //replace with replacement string at appropriate index in the real msg
+//            msg += " ";
+//            for (int j = 0; j < index.size(); j++) {
+//                msg = msg.substring(0, index.get(j)) + replacement + msg.substring(index.get(j) + replacement.length());
+//            } //for
+
+        } //for (loops through badWords ArrayList)
+        return msg; //censored message returned
+    } //filter
+
+} //ChatFilter class
