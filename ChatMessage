@@ -1,0 +1,31 @@
+
+import java.io.Serializable;
+
+final class ChatMessage implements Serializable {
+    private static final long serialVersionUID = 6898543889087L;
+
+    int _msgType;
+    String _msg;
+
+    public int get_msgType() {
+        return this._msgType;
+    }
+
+    public void set_msgType(final int i) {
+        this._msgType = i;
+    }
+
+    public String getMsg(){
+        return this._msg;
+    }
+
+    public void setMsg(final String s) {
+        this._msg = s;
+    }
+
+    ChatMessage(final int _msgType, final String s) {
+        this._msgType = _msgType;
+        this._msg = s;
+    }
+}
+
